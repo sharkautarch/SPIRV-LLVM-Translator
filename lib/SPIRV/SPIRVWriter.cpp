@@ -5489,9 +5489,9 @@ SPIRVValue *LLVMToSPIRVBase::transAsmINTEL(InlineAsm *IA) {
   // TODO: intention here is to provide information about actual target
   //       but in fact spir-64 is substituted as triple when translator works
   //       eventually we need to fix it (not urgent)
-  StringRef TripleStr(M->getTargetTriple());
+  std::string TripleStr = (M->getTargetTriple()).getTriple();
   auto *AsmTarget = static_cast<SPIRVAsmTargetINTEL *>(
-      BM->getOrAddAsmTargetINTEL(TripleStr.str()));
+      BM->getOrAddAsmTargetINTEL(TripleStr));
   auto *SIA = BM->addAsmINTEL(
       static_cast<SPIRVTypeFunction *>(transType(IA->getFunctionType())),
       AsmTarget, IA->getAsmString(), IA->getConstraintString());
@@ -7000,7 +7000,7 @@ bool isValidLLVMModule(Module *M, SPIRVErrorLog &ErrorLog) {
 
   Triple TT(M->getTargetTriple());
   if (!ErrorLog.checkError(isSupportedTriple(TT), SPIRVEC_InvalidTargetTriple,
-                           "Actual target triple is " + M->getTargetTriple()))
+                           "Actual target triple is " + TT.str()))
     return false;
 
   return true;
@@ -7101,7 +7101,13 @@ bool runSpirvBackend(Module *M, std::string &Result, std::string &ErrMsg,
                              ? Triple::spirv64
                              : Triple::spirv32,
                          TargetTriple.getSubArch());
-    M->setTargetTriple(TargetTriple.str());
+
+    //setTargetTriple(T) does std::move(T),
+    //the parameter T isn't a reference, so it probably doesn't matter,
+    //but pass a copy to be on the safe side:
+    Triple TTCopy = TargetTriple;
+    M->setTargetTriple(TTCopy);
+
     // We need to reset Data Layout to conform with the TargetMachine
     M->setDataLayout("");
   }
@@ -7110,7 +7116,7 @@ bool runSpirvBackend(Module *M, std::string &Result, std::string &ErrMsg,
       TargetTriple.setTriple(DefaultTriple);
     TargetTriple.setArch(TargetTriple.getArch(),
                          spirvVersionToSubArch(TranslatorOpts.getMaxVersion()));
-    M->setTargetTriple(TargetTriple.str());
+    M->setTargetTriple(TargetTriple);
   }
 
   // Translate the Module into SPIR-V
